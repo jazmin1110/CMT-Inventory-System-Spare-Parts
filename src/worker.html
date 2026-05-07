@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>CMT Inventory — Worker</title>
+    <link rel="stylesheet" href="./css/style.css" />
+    <!-- jsQR loaded from CDN, exposed as window.jsQR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">CMT Spare Parts</div>
+      <div class="user">
+        <span class="name" id="user-name"></span>
+        <button class="logout" id="logout-btn">Log out</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <!-- Home buttons -->
+      <section id="home-section" class="section active">
+        <div class="worker-actions">
+          <button class="worker-action" data-go="movement">
+            <span class="ico">📝</span>
+            <span>Log Movement</span>
+          </button>
+          <button class="worker-action" data-go="stock">
+            <span class="ico">📦</span>
+            <span>View Stock</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Movement form -->
+      <section id="movement-section" class="section">
+        <button class="btn btn-secondary" id="back-from-movement">
+          ← Back
+        </button>
+        <h2>Log Movement</h2>
+
+        <div class="card">
+          <button class="btn btn-large" id="scan-btn" type="button">
+            📷 Scan QR
+          </button>
+
+          <div class="scanner-box" id="scanner">
+            <video id="qr-video" playsinline></video>
+            <canvas id="qr-canvas"></canvas>
+            <div class="frame"></div>
+          </div>
+          <button
+            class="btn btn-secondary"
+            id="cancel-scan"
+            type="button"
+            style="display:none; margin-top:10px;"
+          >
+            Cancel scan
+          </button>
+
+          <form id="movement-form" style="margin-top:18px;">
+            <div class="form-grid">
+              <div class="form-row big full">
+                <label for="part-id">Part ID</label>
+                <input
+                  type="text"
+                  id="part-id"
+                  name="part_id"
+                  required
+                  autocomplete="off"
+                />
+                <small id="part-name-hint" style="color:var(--gray-text)"></small>
+              </div>
+
+              <div class="form-row big full">
+                <label>Move Type</label>
+                <div class="segmented" id="move-type" role="radiogroup">
+                  <button type="button" data-val="IN" class="active">IN</button>
+                  <button type="button" data-val="OUT">OUT</button>
+                  <button type="button" data-val="ADJUST+">ADJUST +</button>
+                  <button type="button" data-val="ADJUST-">ADJUST −</button>
+                </div>
+                <input type="hidden" id="move-type-val" value="IN" />
+              </div>
+
+              <div class="form-row big full">
+                <label>Quantity</label>
+                <div class="qty">
+                  <button type="button" id="qty-minus">−</button>
+                  <div class="display" id="qty-display">1</div>
+                  <button type="button" id="qty-plus">+</button>
+                </div>
+                <input type="hidden" id="qty-val" value="1" />
+              </div>
+
+              <div class="form-row big full">
+                <label for="location">Location</label>
+                <input type="text" id="location" name="location" required />
+              </div>
+
+              <div class="form-row big">
+                <label for="reference_no">Reference / PO #</label>
+                <input type="text" id="reference_no" name="reference_no" />
+              </div>
+
+              <div class="form-row big">
+                <label for="remarks">Remarks</label>
+                <input type="text" id="remarks" name="remarks" />
+              </div>
+            </div>
+
+            <button class="btn btn-large btn-green" type="submit" id="submit-mv" style="margin-top:18px; width:100%;">
+              Submit Movement
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Stock list -->
+      <section id="stock-section" class="section">
+        <button class="btn btn-secondary" id="back-from-stock">← Back</button>
+        <h2>Current Stock</h2>
+
+        <div class="search-bar">
+          <input
+            type="search"
+            id="stock-search"
+            placeholder="Search by part name..."
+          />
+        </div>
+
+        <div id="stock-list" class="stock-list">
+          <div class="card">Loading stock...</div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="./js/worker.js"></script>
+  </body>
+</html>

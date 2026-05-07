@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>CMT Inventory — Sign In</title>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body class="login-screen">
+    <main class="login-card">
+      <h1 class="login-title">CMT Spare Parts</h1>
+      <p class="login-sub">Enter your 4-digit PIN to continue</p>
+
+      <div id="pin-dots" class="pin-dots" aria-label="PIN entry">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+
+      <div id="pin-pad" class="pin-pad">
+        <button class="pin-key" data-key="1">1</button>
+        <button class="pin-key" data-key="2">2</button>
+        <button class="pin-key" data-key="3">3</button>
+        <button class="pin-key" data-key="4">4</button>
+        <button class="pin-key" data-key="5">5</button>
+        <button class="pin-key" data-key="6">6</button>
+        <button class="pin-key" data-key="7">7</button>
+        <button class="pin-key" data-key="8">8</button>
+        <button class="pin-key" data-key="9">9</button>
+        <button class="pin-key action" data-key="clear">Clear</button>
+        <button class="pin-key" data-key="0">0</button>
+        <button class="pin-key action" data-key="back">⌫</button>
+      </div>
+    </main>
+
+    <script type="module">
+      import { initLoginScreen, getUser } from './js/auth.js';
+
+      // If already signed in, jump straight to the right home screen.
+      const existing = getUser();
+      if (existing) {
+        window.location.href =
+          existing.role === 'manager' ? './dashboard.html' : './worker.html';
+      } else {
+        initLoginScreen();
+      }
+    </script>
+  </body>
+</html>

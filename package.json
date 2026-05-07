@@ -1,0 +1,18 @@
+{
+  "name": "cmt-inventory-system-spare-parts",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Spare parts inventory web app for a garment factory in the Philippines.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>CMT Inventory — Manager</title>
+    <link rel="stylesheet" href="./css/style.css" />
+    <!-- qrcode.js loaded from CDN, exposed as window.QRCode -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">CMT Spare Parts</div>
+      <nav class="nav" id="main-nav">
+        <a href="#dashboard" data-tab="dashboard" class="active">Dashboard</a>
+        <a href="#parts" data-tab="parts">Parts</a>
+        <a href="#movements" data-tab="movements">Movements</a>
+        <a href="#maintenance" data-tab="maintenance">Maintenance</a>
+        <a href="#users" data-tab="users">Users</a>
+      </nav>
+      <div class="user">
+        <span class="name" id="user-name"></span>
+        <button class="logout" id="logout-btn">Log out</button>
+      </div>
+    </header>
+
+    <main class="page">
+      <!-- Dashboard tab -->
+      <section id="tab-dashboard" class="section active">
+        <h2>Dashboard</h2>
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi"><div class="label">Total Parts</div><div class="value" id="kpi-total">—</div></div>
+          <div class="kpi red"><div class="label">Reorder Now</div><div class="value" id="kpi-reorder">—</div></div>
+          <div class="kpi yellow"><div class="label">Running Low</div><div class="value" id="kpi-low">—</div></div>
+          <div class="kpi green"><div class="label">Inventory Value</div><div class="value" id="kpi-value">—</div></div>
+        </div>
+
+        <h3>Parts to Reorder</h3>
+        <div class="table-wrap">
+          <table class="data reorder">
+            <thead>
+              <tr>
+                <th>Part ID</th><th>Name</th><th>Machine</th>
+                <th>Current Stock</th><th>Reorder Point</th><th>Suggested Order Qty</th>
+              </tr>
+            </thead>
+            <tbody id="reorder-tbody">
+              <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Recent Movements</h3>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date / Time</th><th>Part ID</th><th>Part Name</th>
+                <th>Move Type</th><th>Quantity</th><th>Logged By</th>
+              </tr>
+            </thead>
+            <tbody id="recent-mv-tbody">
+              <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Parts tab -->
+      <section id="tab-parts" class="section">
+        <h2>Parts</h2>
+
+        <div class="search-bar">
+          <input type="search" id="parts-search" placeholder="Search by name, part ID, or category..." />
+          <button class="btn" id="show-add-part">+ Add Part</button>
+        </div>
+
+        <div class="card" id="add-part-card" style="display:none;">
+          <h3 style="margin-top:0;">Add Part</h3>
+          <form id="add-part-form">
+            <div class="form-grid">
+              <div class="form-row"><label>Part ID</label><input type="text" name="part_id" required /></div>
+              <div class="form-row"><label>Name</label><input type="text" name="name" required /></div>
+              <div class="form-row"><label>Machine</label><select name="machine_id" id="add-machine"></select></div>
+              <div class="form-row">
+                <label>Category</label>
+                <select name="category">
+                  <option>Mechanical</option><option>Electrical</option>
+                  <option>Pneumatic</option><option>Hydraulic</option>
+                  <option>Consumable</option><option>Cutting</option>
+                  <option>Sewing</option><option>Printing</option>
+                  <option>Embroidery</option>
+                </select>
+              </div>
+              <div class="form-row"><label>Supplier</label><select name="supplier_id" id="add-supplier"></select></div>
+              <div class="form-row"><label>Unit Cost (₱)</label><input type="number" step="0.01" name="unit_cost" /></div>
+              <div class="form-row"><label>Reorder Point</label><input type="number" name="reorder_point" /></div>
+              <div class="form-row"><label>Target Stock</label><input type="number" name="target_stock" /></div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:10px;">
+              <button class="btn btn-green" type="submit" id="save-part-btn">Save Part</button>
+              <button class="btn btn-secondary" type="button" id="cancel-add-part">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Part ID</th><th>Name</th><th>Machine</th><th>Category</th>
+                <th>Supplier</th><th>Unit Cost</th><th>Reorder Pt</th>
+                <th>Target</th><th>Stock</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="parts-tbody"><tr><td colspan="10">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Movements tab -->
+      <section id="tab-movements" class="section">
+        <h2>Movement Log</h2>
+        <div class="search-bar">
+          <select id="filter-move-type">
+            <option value="">All types</option>
+            <option value="IN">IN</option>
+            <option value="OUT">OUT</option>
+            <option value="ADJUST+">ADJUST +</option>
+            <option value="ADJUST-">ADJUST −</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px;">
+            From <input type="date" id="filter-from" />
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            To <input type="date" id="filter-to" />
+          </label>
+          <button class="btn btn-secondary" id="apply-mv-filter">Apply</button>
+          <button class="btn btn-secondary" id="clear-mv-filter">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date / Time</th><th>Part ID</th><th>Part Name</th>
+                <th>Move Type</th><th>Quantity</th><th>Location</th>
+                <th>Reference</th><th>Remarks</th><th>Logged By</th>
+              </tr>
+            </thead>
+            <tbody id="all-mv-tbody"><tr><td colspan="9">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Maintenance tab -->
+      <section id="tab-maintenance" class="section">
+        <h2>Maintenance Log</h2>
+        <div class="search-bar">
+          <button class="btn" id="show-add-maint">+ Add Entry</button>
+        </div>
+
+        <div class="card" id="add-maint-card" style="display:none;">
+          <h3 style="margin-top:0;">Add Maintenance Entry</h3>
+          <form id="add-maint-form">
+            <div class="form-grid">
+              <div class="form-row"><label>Date</label><input type="date" name="date" required /></div>
+              <div class="form-row"><label>Machine</label><select name="machine_id" id="maint-machine" required></select></div>
+              <div class="form-row">
+                <label>Type</label>
+                <select name="type">
+                  <option>Preventive</option><option>Breakdown</option>
+                  <option>Inspection</option><option>Overhaul</option>
+                  <option>Cleaning</option>
+                </select>
+              </div>
+              <div class="form-row"><label>Technician</label><input type="text" name="technician" /></div>
+              <div class="form-row"><label>Downtime (hrs)</label><input type="number" step="0.1" name="downtime_hrs" /></div>
+              <div class="form-row"><label>Cost (₱)</label><input type="number" step="0.01" name="cost" /></div>
+              <div class="form-row full"><label>Work Done</label><textarea name="work_done"></textarea></div>
+              <div class="form-row full"><label>Parts Used</label><textarea name="parts_used"></textarea></div>
+              <div class="form-row"><label>Next Service Date</label><input type="date" name="next_service_date" /></div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:10px;">
+              <button class="btn btn-green" type="submit" id="save-maint-btn">Save Entry</button>
+              <button class="btn btn-secondary" type="button" id="cancel-add-maint">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date</th><th>Machine</th><th>Type</th><th>Work Done</th>
+                <th>Parts Used</th><th>Technician</th><th>Downtime</th>
+                <th>Cost</th><th>Next Service</th>
+              </tr>
+            </thead>
+            <tbody id="maint-tbody"><tr><td colspan="9">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Users tab -->
+      <section id="tab-users" class="section">
+        <h2>Users</h2>
+        <div class="search-bar">
+          <button class="btn" id="show-add-user">+ Add User</button>
+        </div>
+
+        <div class="card" id="add-user-card" style="display:none;">
+          <h3 style="margin-top:0;">Add User</h3>
+          <form id="add-user-form">
+            <div class="form-grid">
+              <div class="form-row"><label>Name</label><input type="text" name="name" required /></div>
+              <div class="form-row">
+                <label>PIN (4 digits)</label>
+                <input type="password" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required />
+              </div>
+              <div class="form-row">
+                <label>Role</label>
+                <select name="role">
+                  <option value="worker">worker</option>
+                  <option value="manager">manager</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:10px;">
+              <button class="btn btn-green" type="submit" id="save-user-btn">Save User</button>
+              <button class="btn btn-secondary" type="button" id="cancel-add-user">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Name</th><th>Role</th><th>PIN</th></tr>
+            </thead>
+            <tbody id="users-tbody"><tr><td colspan="3">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- QR modal -->
+    <div class="modal-bg" id="qr-modal">
+      <div class="modal">
+        <h3>Part QR Code</h3>
+        <div id="qr-modal-text" style="color:var(--gray-text); font-size:0.95rem;"></div>
+        <div class="qrcode" id="qr-modal-canvas"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="qr-close">Close</button>
+          <button class="btn" id="qr-print">Print</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./js/dashboard.js"></script>
+  </body>
+</html>
