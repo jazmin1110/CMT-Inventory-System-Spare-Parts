@@ -515,13 +515,15 @@ function renderMovements() {
 
   if (!items.length) {
     tbody.innerHTML =
-      '<tr><td colspan="9" style="text-align:center;">No movements match the filter.</td></tr>';
+      '<tr><td colspan="11" style="text-align:center;">No movements match the filter.</td></tr>';
     return;
   }
   tbody.innerHTML = items
     .map((m) => {
       const part = partsCache.find((p) => p.part_id === m.part_id);
       const usr = usersCache.find((u) => u.id === m.user_id);
+      const reqUsr = usersCache.find((u) => u.id === m.requested_by);
+      const mach = machinesCache.find((mc) => mc.id === m.machine_id);
       return `<tr>
         <td>${formatDateTime(m.created_at)}</td>
         <td>${escapeHtml(m.part_id)}</td>
@@ -532,6 +534,8 @@ function renderMovements() {
         <td>${escapeHtml(m.reference_no || '')}</td>
         <td>${escapeHtml(m.remarks || '')}</td>
         <td>${escapeHtml(usr?.name || '')}</td>
+        <td>${escapeHtml(reqUsr?.name || '')}</td>
+        <td>${escapeHtml(mach?.name || '')}</td>
       </tr>`;
     })
     .join('');

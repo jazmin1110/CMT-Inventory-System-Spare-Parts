@@ -14,6 +14,14 @@
   <body>
     <header class="topbar">
       <div class="brand">CMT Spare Parts</div>
+      <nav class="nav" id="main-nav">
+        <a href="#dashboard" data-tab="dashboard" class="active">Dashboard</a>
+        <a href="#stock" data-tab="stock">Stock</a>
+        <a href="#movement" data-tab="movement">Log Movement</a>
+        <a href="#parts" data-tab="parts">Parts</a>
+        <a href="#movements" data-tab="movements">Movements</a>
+        <a href="#maintenance" data-tab="maintenance">Maintenance</a>
+      </nav>
       <div class="user">
         <span class="name" id="user-name"></span>
         <button class="logout" id="logout-btn">Log out</button>
@@ -21,25 +29,63 @@
     </header>
 
     <main class="page">
-      <!-- Home buttons -->
-      <section id="home-section" class="section active">
-        <div class="worker-actions">
-          <button class="worker-action" data-go="movement">
-            <span class="ico">📝</span>
-            <span>Log Movement</span>
-          </button>
-          <button class="worker-action" data-go="stock">
-            <span class="ico">📦</span>
-            <span>View Stock</span>
-          </button>
+      <!-- Dashboard tab (no inventory value) -->
+      <section id="tab-dashboard" class="section active">
+        <h2>Dashboard</h2>
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi"><div class="label">Total Parts</div><div class="value" id="kpi-total">—</div></div>
+          <div class="kpi red"><div class="label">Reorder Now</div><div class="value" id="kpi-reorder">—</div></div>
+          <div class="kpi yellow"><div class="label">Running Low</div><div class="value" id="kpi-low">—</div></div>
+        </div>
+
+        <h3>Parts to Reorder</h3>
+        <div class="table-wrap">
+          <table class="data reorder">
+            <thead>
+              <tr>
+                <th>Part ID</th><th>Name</th><th>Machine</th>
+                <th>Current Stock</th><th>Reorder Point</th><th>Suggested Order Qty</th>
+              </tr>
+            </thead>
+            <tbody id="reorder-tbody">
+              <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Recent Movements</h3>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date / Time</th><th>Part ID</th><th>Part Name</th>
+                <th>Move Type</th><th>Quantity</th><th>Logged By</th>
+              </tr>
+            </thead>
+            <tbody id="recent-mv-tbody">
+              <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
-      <!-- Movement form -->
-      <section id="movement-section" class="section">
-        <button class="btn btn-secondary" id="back-from-movement">
-          ← Back
-        </button>
+      <!-- Stock tab (card list — workers prefer this for quick lookup) -->
+      <section id="tab-stock" class="section">
+        <h2>Current Stock</h2>
+        <div class="search-bar">
+          <input
+            type="search"
+            id="stock-search"
+            placeholder="Search by part name..."
+          />
+        </div>
+        <div id="stock-list" class="stock-list">
+          <div class="card">Loading stock...</div>
+        </div>
+      </section>
+
+      <!-- Log Movement tab -->
+      <section id="tab-movement" class="section">
         <h2>Log Movement</h2>
 
         <div class="card">
@@ -96,6 +142,22 @@
                 <input type="hidden" id="qty-val" value="1" />
               </div>
 
+              <!-- New: who is requesting + which machine.
+                   These fields auto-show only when Move Type = OUT, since
+                   IN / ADJUST entries don't have a "requesting worker". -->
+              <div class="form-row big" id="row-requested-by" style="display:none;">
+                <label for="requested-by">Requested by</label>
+                <select id="requested-by" name="requested_by">
+                  <option value="">— Select worker —</option>
+                </select>
+              </div>
+              <div class="form-row big" id="row-machine" style="display:none;">
+                <label for="machine">Machine</label>
+                <select id="machine" name="machine_id">
+                  <option value="">— Select machine —</option>
+                </select>
+              </div>
+
               <div class="form-row big full">
                 <label for="location">Location</label>
                 <input type="text" id="location" name="location" required />
@@ -119,21 +181,107 @@
         </div>
       </section>
 
-      <!-- Stock list -->
-      <section id="stock-section" class="section">
-        <button class="btn btn-secondary" id="back-from-stock">← Back</button>
-        <h2>Current Stock</h2>
-
+      <!-- Parts tab (read-only, no Unit Cost, no Actions) -->
+      <section id="tab-parts" class="section">
+        <h2>Parts</h2>
         <div class="search-bar">
-          <input
-            type="search"
-            id="stock-search"
-            placeholder="Search by part name..."
-          />
+          <input type="search" id="parts-search" placeholder="Search by name, part ID, or category..." />
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Part ID</th><th>Name</th><th>Machine</th><th>Category</th>
+                <th>Supplier</th><th>Reorder Pt</th>
+                <th>Target</th><th>Stock</th>
+              </tr>
+            </thead>
+            <tbody id="parts-tbody"><tr><td colspan="8">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Movements tab (read-only) -->
+      <section id="tab-movements" class="section">
+        <h2>Movement Log</h2>
+        <div class="search-bar">
+          <select id="filter-move-type">
+            <option value="">All types</option>
+            <option value="IN">IN</option>
+            <option value="OUT">OUT</option>
+            <option value="ADJUST+">ADJUST +</option>
+            <option value="ADJUST-">ADJUST −</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px;">
+            From <input type="date" id="filter-from" />
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            To <input type="date" id="filter-to" />
+          </label>
+          <button class="btn btn-secondary" id="apply-mv-filter">Apply</button>
+          <button class="btn btn-secondary" id="clear-mv-filter">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date / Time</th><th>Part ID</th><th>Part Name</th>
+                <th>Move Type</th><th>Quantity</th><th>Location</th>
+                <th>Reference</th><th>Remarks</th><th>Logged By</th>
+                <th>Requested By</th><th>Machine</th>
+              </tr>
+            </thead>
+            <tbody id="all-mv-tbody"><tr><td colspan="11">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Maintenance tab (read + add) -->
+      <section id="tab-maintenance" class="section">
+        <h2>Maintenance Log</h2>
+        <div class="search-bar">
+          <button class="btn" id="show-add-maint">+ Add Entry</button>
         </div>
 
-        <div id="stock-list" class="stock-list">
-          <div class="card">Loading stock...</div>
+        <div class="card" id="add-maint-card" style="display:none;">
+          <h3 style="margin-top:0;">Add Maintenance Entry</h3>
+          <form id="add-maint-form">
+            <div class="form-grid">
+              <div class="form-row"><label>Date</label><input type="date" name="date" required /></div>
+              <div class="form-row"><label>Machine</label><select name="machine_id" id="maint-machine" required></select></div>
+              <div class="form-row">
+                <label>Type</label>
+                <select name="type">
+                  <option>Preventive</option><option>Breakdown</option>
+                  <option>Inspection</option><option>Overhaul</option>
+                  <option>Cleaning</option>
+                </select>
+              </div>
+              <div class="form-row"><label>Technician</label><input type="text" name="technician" /></div>
+              <div class="form-row"><label>Downtime (hrs)</label><input type="number" step="0.1" name="downtime_hrs" /></div>
+              <div class="form-row"><label>Cost (₱)</label><input type="number" step="0.01" name="cost" /></div>
+              <div class="form-row full"><label>Work Done</label><textarea name="work_done"></textarea></div>
+              <div class="form-row full"><label>Parts Used</label><textarea name="parts_used"></textarea></div>
+              <div class="form-row"><label>Next Service Date</label><input type="date" name="next_service_date" /></div>
+            </div>
+            <div style="margin-top:14px; display:flex; gap:10px;">
+              <button class="btn btn-green" type="submit" id="save-maint-btn">Save Entry</button>
+              <button class="btn btn-secondary" type="button" id="cancel-add-maint">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Date</th><th>Machine</th><th>Type</th><th>Work Done</th>
+                <th>Parts Used</th><th>Technician</th><th>Downtime</th>
+                <th>Cost</th><th>Next Service</th>
+              </tr>
+            </thead>
+            <tbody id="maint-tbody"><tr><td colspan="9">Loading...</td></tr></tbody>
+          </table>
         </div>
       </section>
     </main>
