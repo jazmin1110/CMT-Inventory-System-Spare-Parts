@@ -240,6 +240,11 @@ async function loadDashboard() {
 // ---------- Parts tab ----------
 const partsTbody = document.querySelector('#parts-tbody');
 const partsSearchEl = document.querySelector('#parts-search');
+const partsFilterMachineEl = document.querySelector('#parts-filter-machine');
+const partsFilterCategoryEl = document.querySelector('#parts-filter-category');
+const partsFilterStatusEl = document.querySelector('#parts-filter-status');
+const partsClearFilterBtn = document.querySelector('#parts-clear-filter');
+let partsStockMap = {};
 
 /** Fill a <select> with [{id, name}] entries. */
 function fillSelect(selectEl, items, blank = '— Select —') {
@@ -263,28 +268,64 @@ async function loadParts() {
     if (partsRes.error) throw partsRes.error;
     if (movesRes.error) throw movesRes.error;
     partsCache = partsRes.data || [];
-    const stockMap = buildStockMap(movesRes.data || []);
-    renderParts(stockMap, partsSearchEl.value);
+    partsStockMap = buildStockMap(movesRes.data || []);
+    populatePartsFilters();
+    renderParts();
   } catch (err) {
     console.error(err);
     showBanner('Failed to load parts: ' + (err.message || err), 'error');
   }
 }
 
-/** Render the parts table with optional search filter. */
-function renderParts(stockMap, search = '') {
-  const q = search.trim().toLowerCase();
-  const items = q
-    ? partsCache.filter((p) =>
-        [p.part_id, p.name, p.category]
-          .map((v) => (v || '').toLowerCase())
-          .some((v) => v.includes(q))
+/** Fill the Machine + Category dropdowns, preserving the current selection. */
+function populatePartsFilters() {
+  const prevMachine = partsFilterMachineEl.value;
+  const prevCategory = partsFilterCategoryEl.value;
+
+  partsFilterMachineEl.innerHTML =
+    '<option value="">All machines</option>' +
+    machinesCache
+      .map(
+        (m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`
       )
-    : partsCache;
+      .join('');
+  if (prevMachine) partsFilterMachineEl.value = prevMachine;
+
+  const cats = Array.from(
+    new Set(partsCache.map((p) => p.category).filter(Boolean))
+  ).sort();
+  partsFilterCategoryEl.innerHTML =
+    '<option value="">All categories</option>' +
+    cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (prevCategory) partsFilterCategoryEl.value = prevCategory;
+}
+
+/** Render the parts table from cached data, applying every active filter. */
+function renderParts() {
+  const q = partsSearchEl.value.trim().toLowerCase();
+  const machineId = partsFilterMachineEl.value;
+  const category = partsFilterCategoryEl.value;
+  const status = partsFilterStatusEl.value;
+
+  const items = partsCache.filter((p) => {
+    if (machineId && p.machine_id !== machineId) return false;
+    if (category && p.category !== category) return false;
+    if (status) {
+      const st = statusFor(partsStockMap[p.part_id] || 0, p.reorder_point || 0);
+      if (st.label !== status) return false;
+    }
+    if (q) {
+      const hay = [p.part_id, p.name, p.category]
+        .map((v) => (v || '').toLowerCase())
+        .join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   if (!items.length) {
     partsTbody.innerHTML =
-      '<tr><td colspan="10" style="text-align:center;">No parts.</td></tr>';
+      '<tr><td colspan="10" style="text-align:center;">No parts match the filter.</td></tr>';
     return;
   }
 
@@ -294,7 +335,7 @@ function renderParts(stockMap, search = '') {
         machinesCache.find((m) => m.id === p.machine_id)?.name || '';
       const supplier =
         suppliersCache.find((s) => s.id === p.supplier_id)?.name || '';
-      const stock = stockMap[p.part_id] || 0;
+      const stock = partsStockMap[p.part_id] || 0;
       const st = statusFor(stock, p.reorder_point || 0);
       return `<tr data-id="${p.id}">
         <td>${escapeHtml(p.part_id)}</td>
@@ -315,7 +356,17 @@ function renderParts(stockMap, search = '') {
     .join('');
 }
 
-partsSearchEl.addEventListener('input', () => loadParts());
+partsSearchEl.addEventListener('input', renderParts);
+partsFilterMachineEl.addEventListener('change', renderParts);
+partsFilterCategoryEl.addEventListener('change', renderParts);
+partsFilterStatusEl.addEventListener('change', renderParts);
+partsClearFilterBtn.addEventListener('click', () => {
+  partsSearchEl.value = '';
+  partsFilterMachineEl.value = '';
+  partsFilterCategoryEl.value = '';
+  partsFilterStatusEl.value = '';
+  renderParts();
+});
 
 // Show/hide add part form
 document.querySelector('#show-add-part').addEventListener('click', () => {
@@ -522,7 +573,6 @@ function renderMovements() {
     .map((m) => {
       const part = partsCache.find((p) => p.part_id === m.part_id);
       const usr = usersCache.find((u) => u.id === m.user_id);
-      const reqUsr = usersCache.find((u) => u.id === m.requested_by);
       const mach = machinesCache.find((mc) => mc.id === m.machine_id);
       return `<tr>
         <td>${formatDateTime(m.created_at)}</td>
@@ -534,7 +584,7 @@ function renderMovements() {
         <td>${escapeHtml(m.reference_no || '')}</td>
         <td>${escapeHtml(m.remarks || '')}</td>
         <td>${escapeHtml(usr?.name || '')}</td>
-        <td>${escapeHtml(reqUsr?.name || '')}</td>
+        <td>${escapeHtml(m.requested_by || '')}</td>
         <td>${escapeHtml(mach?.name || '')}</td>
       </tr>`;
     })
@@ -549,9 +599,16 @@ document.querySelector('#clear-mv-filter').addEventListener('click', () => {
   renderMovements();
 });
 
-// ---------- Maintenance tab (read-only) ----------
+// ---------- Maintenance tab (read-only, with filters) ----------
 // Maintenance entries are now created via the Log Movement OUT flow on
 // worker.html. The manager dashboard simply displays the resulting log.
+const maintFilterMachineEl = document.querySelector('#maint-filter-machine');
+const maintFilterTypeEl = document.querySelector('#maint-filter-type');
+const maintFilterFromEl = document.querySelector('#maint-filter-from');
+const maintFilterToEl = document.querySelector('#maint-filter-to');
+const maintClearFilterBtn = document.querySelector('#maint-clear-filter');
+let maintenanceCache = [];
+
 async function loadMaintenance() {
   try {
     if (!machinesCache.length) await loadLookups();
@@ -561,18 +618,62 @@ async function loadMaintenance() {
       .select('*')
       .order('date', { ascending: false });
     if (error) throw error;
-    renderMaintenance(data || []);
+    maintenanceCache = data || [];
+    populateMaintFilters();
+    renderMaintenance();
   } catch (err) {
     console.error(err);
     showBanner('Failed to load maintenance: ' + (err.message || err), 'error');
   }
 }
 
-function renderMaintenance(rows) {
+function populateMaintFilters() {
+  const prevMachine = maintFilterMachineEl.value;
+  const prevType = maintFilterTypeEl.value;
+
+  maintFilterMachineEl.innerHTML =
+    '<option value="">All machines</option>' +
+    machinesCache
+      .map(
+        (m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`
+      )
+      .join('');
+  if (prevMachine) maintFilterMachineEl.value = prevMachine;
+
+  const types = Array.from(
+    new Set(maintenanceCache.map((r) => r.type).filter(Boolean))
+  ).sort();
+  maintFilterTypeEl.innerHTML =
+    '<option value="">All types</option>' +
+    types.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (prevType) maintFilterTypeEl.value = prevType;
+}
+
+function renderMaintenance() {
   const tbody = document.querySelector('#maint-tbody');
+  const machineId = maintFilterMachineEl.value;
+  const typeVal = maintFilterTypeEl.value;
+  const fromVal = maintFilterFromEl.value;
+  const toVal = maintFilterToEl.value;
+  const fromTs = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
+  const toTs = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
+
+  const rows = maintenanceCache.filter((r) => {
+    if (machineId && r.machine_id !== machineId) return false;
+    if (typeVal && r.type !== typeVal) return false;
+    if (r.date) {
+      const t = new Date(r.date).getTime();
+      if (fromTs && t < fromTs) return false;
+      if (toTs && t > toTs) return false;
+    } else if (fromTs || toTs) {
+      return false;
+    }
+    return true;
+  });
+
   if (!rows.length) {
     tbody.innerHTML =
-      '<tr><td colspan="9" style="text-align:center;">No maintenance entries.</td></tr>';
+      '<tr><td colspan="8" style="text-align:center;">No maintenance entries match the filter.</td></tr>';
     return;
   }
   const today = new Date();
@@ -597,12 +698,23 @@ function renderMaintenance(rows) {
         <td>${escapeHtml(r.parts_used || '')}</td>
         <td>${escapeHtml(r.technician || '')}</td>
         <td>${r.downtime_hrs ?? ''}</td>
-        <td>${formatPHP(r.cost || 0)}</td>
         <td>${escapeHtml(r.next_service_date || '')}</td>
       </tr>`;
     })
     .join('');
 }
+
+maintFilterMachineEl.addEventListener('change', renderMaintenance);
+maintFilterTypeEl.addEventListener('change', renderMaintenance);
+maintFilterFromEl.addEventListener('change', renderMaintenance);
+maintFilterToEl.addEventListener('change', renderMaintenance);
+maintClearFilterBtn.addEventListener('click', () => {
+  maintFilterMachineEl.value = '';
+  maintFilterTypeEl.value = '';
+  maintFilterFromEl.value = '';
+  maintFilterToEl.value = '';
+  renderMaintenance();
+});
 
 // ---------- Users tab ----------
 async function loadUsers() {

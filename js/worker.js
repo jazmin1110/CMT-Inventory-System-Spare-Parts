@@ -1,5 +1,5 @@
 // Worker dashboard logic.
-// Six tabs: Dashboard, Stock, Log Movement, Parts (read-only),
+// Five tabs: Dashboard, Log Movement, Parts (read-only),
 // Movements, Maintenance. The dashboard hides the inventory-value KPI
 // and the parts table omits Unit Cost; otherwise much of the read logic
 // mirrors js/dashboard.js so workers and managers see the same data.
@@ -18,7 +18,6 @@ document.querySelector('#logout-btn').addEventListener('click', logout);
 const navLinks = document.querySelectorAll('#main-nav a');
 const sections = {
   dashboard: document.querySelector('#tab-dashboard'),
-  stock: document.querySelector('#tab-stock'),
   movement: document.querySelector('#tab-movement'),
   parts: document.querySelector('#tab-parts'),
   movements: document.querySelector('#tab-movements'),
@@ -32,12 +31,9 @@ function activateTab(name) {
     el.classList.toggle('active', k === name)
   );
   if (name === 'dashboard') loadDashboard();
-  if (name === 'stock') loadStock();
   if (name === 'parts') loadParts();
   if (name === 'movements') loadMovements();
   if (name === 'maintenance') loadMaintenance();
-  // The Log Movement form has no "load on activate" step — its dropdowns
-  // are populated once at boot from loadLookups().
   if (name === 'movement') stopScannerIfRunning();
 }
 navLinks.forEach((a) => {
@@ -57,6 +53,8 @@ let allMovementsCache = [];
 async function loadLookups() {
   const [m, u] = await Promise.all([
     supabase.from('machines').select('id, name').order('name'),
+    // We still need the users list for resolving the "Logged By" column on
+    // the movements page (m.user_id -> name).
     supabase.from('users').select('id, name, role').order('name'),
   ]);
   if (m.error) throw m.error;
@@ -64,21 +62,10 @@ async function loadLookups() {
   machinesCache = m.data || [];
   usersCache = u.data || [];
 
-  // Populate the worker dropdowns now that we have the data.
-  fillUserSelect(document.querySelector('#requested-by'));
+  // Populate the Machine dropdown in the Log Movement form.
   fillMachineSelect(document.querySelector('#machine'));
 }
 
-function fillUserSelect(selectEl) {
-  if (!selectEl) return;
-  selectEl.innerHTML =
-    '<option value="">— Select worker —</option>' +
-    usersCache
-      .map(
-        (u) => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)}</option>`
-      )
-      .join('');
-}
 function fillMachineSelect(selectEl) {
   if (!selectEl) return;
   selectEl.innerHTML =
@@ -91,17 +78,6 @@ function fillMachineSelect(selectEl) {
 }
 
 // ---------- Helpers ----------
-
-function formatPHP(n) {
-  const num = Number(n) || 0;
-  return (
-    '₱' +
-    num.toLocaleString('en-PH', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  );
-}
 
 function formatDateTime(iso) {
   if (!iso) return '';
@@ -151,19 +127,6 @@ function moveTypePill(type) {
   else if (type === 'OUT') cls = 'red';
   else if (type && type.startsWith('ADJUST')) cls = 'yellow';
   return `<span class="pill ${cls}">${escapeHtml(type)}</span>`;
-}
-
-/** Wrap a button click with spinner + disabled state. */
-async function withBusyButton(btn, fn) {
-  const original = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Saving...';
-  try {
-    await fn();
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = original;
-  }
 }
 
 // ---------- Dashboard tab (no Inventory Value) ----------
@@ -255,65 +218,6 @@ async function loadDashboard() {
     showBanner('Failed to load dashboard: ' + (err.message || err), 'error');
   }
 }
-
-// ---------- Stock tab (card list) ----------
-const stockListEl = document.querySelector('#stock-list');
-const stockSearch = document.querySelector('#stock-search');
-let allStock = [];
-
-async function loadStock() {
-  stockListEl.innerHTML = '<div class="card">Loading stock...</div>';
-  try {
-    const [partsRes, movesRes] = await Promise.all([
-      supabase.from('parts').select('*').order('name'),
-      supabase.from('movement_log').select('part_id, move_type, quantity'),
-    ]);
-    if (partsRes.error) throw partsRes.error;
-    if (movesRes.error) throw movesRes.error;
-
-    const stockMap = buildStockMap(movesRes.data || []);
-    allStock = (partsRes.data || []).map((p) => ({
-      ...p,
-      current_stock: stockMap[p.part_id] || 0,
-    }));
-    renderStock(stockSearch.value);
-  } catch (err) {
-    console.error(err);
-    stockListEl.innerHTML = '';
-    showBanner('Failed to load stock: ' + (err.message || err), 'error');
-  }
-}
-
-function renderStock(filter = '') {
-  const q = filter.trim().toLowerCase();
-  const items = q
-    ? allStock.filter((p) => (p.name || '').toLowerCase().includes(q))
-    : allStock;
-
-  if (!items.length) {
-    stockListEl.innerHTML = '<div class="card">No parts found.</div>';
-    return;
-  }
-
-  stockListEl.innerHTML = items
-    .map((p) => {
-      const st = statusFor(p.current_stock, p.reorder_point || 0);
-      return `
-        <div class="stock-item">
-          <div class="info">
-            <div class="name">${escapeHtml(p.name || '')}</div>
-            <div class="meta">${escapeHtml(p.part_id || '')}</div>
-          </div>
-          <div class="right">
-            <div class="qty-num">${p.current_stock}</div>
-            <span class="pill ${st.cls}">${st.label}</span>
-          </div>
-        </div>`;
-    })
-    .join('');
-}
-
-stockSearch.addEventListener('input', (e) => renderStock(e.target.value));
 
 // ---------- Log Movement tab ----------
 const moveTypeBtns = document.querySelectorAll('#move-type button');
@@ -445,8 +349,9 @@ movementForm.addEventListener('submit', async (e) => {
     remarks: document.querySelector('#remarks').value.trim() || null,
     user_id: user.id,
     // Only send these for OUT movements; null for IN / ADJUST.
+    // requested_by is now free-form text (any name, not necessarily a user row).
     requested_by: isOut
-      ? document.querySelector('#requested-by').value || null
+      ? document.querySelector('#requested-by').value.trim() || null
       : null,
     machine_id: isOut
       ? document.querySelector('#machine').value || null
@@ -490,9 +395,6 @@ movementForm.addEventListener('submit', async (e) => {
         downtime_hrs: document.querySelector('#maint-downtime').value
           ? Number(document.querySelector('#maint-downtime').value)
           : null,
-        cost: document.querySelector('#maint-cost').value
-          ? Number(document.querySelector('#maint-cost').value)
-          : null,
         next_service_date:
           document.querySelector('#maint-next').value || null,
       };
@@ -530,7 +432,12 @@ movementForm.addEventListener('submit', async (e) => {
 // ---------- Parts tab (read-only, no Unit Cost) ----------
 const partsTbody = document.querySelector('#parts-tbody');
 const partsSearchEl = document.querySelector('#parts-search');
+const partsFilterMachineEl = document.querySelector('#parts-filter-machine');
+const partsFilterCategoryEl = document.querySelector('#parts-filter-category');
+const partsFilterStatusEl = document.querySelector('#parts-filter-status');
+const partsClearFilterBtn = document.querySelector('#parts-clear-filter');
 let suppliersCacheLocal = [];
+let partsStockMap = {};
 
 async function loadParts() {
   try {
@@ -548,27 +455,64 @@ async function loadParts() {
     if (partsRes.error) throw partsRes.error;
     if (movesRes.error) throw movesRes.error;
     partsCache = partsRes.data || [];
-    const stockMap = buildStockMap(movesRes.data || []);
-    renderParts(stockMap, partsSearchEl.value);
+    partsStockMap = buildStockMap(movesRes.data || []);
+    populatePartsFilters();
+    renderParts();
   } catch (err) {
     console.error(err);
     showBanner('Failed to load parts: ' + (err.message || err), 'error');
   }
 }
 
-function renderParts(stockMap, search = '') {
-  const q = search.trim().toLowerCase();
-  const items = q
-    ? partsCache.filter((p) =>
-        [p.part_id, p.name, p.category]
-          .map((v) => (v || '').toLowerCase())
-          .some((v) => v.includes(q))
+/** Fill the Machine + Category dropdowns from cached data, preserving the
+ *  current selection so a re-render doesn't reset the user's filter. */
+function populatePartsFilters() {
+  const prevMachine = partsFilterMachineEl.value;
+  const prevCategory = partsFilterCategoryEl.value;
+
+  partsFilterMachineEl.innerHTML =
+    '<option value="">All machines</option>' +
+    machinesCache
+      .map(
+        (m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`
       )
-    : partsCache;
+      .join('');
+  if (prevMachine) partsFilterMachineEl.value = prevMachine;
+
+  const cats = Array.from(
+    new Set(partsCache.map((p) => p.category).filter(Boolean))
+  ).sort();
+  partsFilterCategoryEl.innerHTML =
+    '<option value="">All categories</option>' +
+    cats.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (prevCategory) partsFilterCategoryEl.value = prevCategory;
+}
+
+function renderParts() {
+  const q = partsSearchEl.value.trim().toLowerCase();
+  const machineId = partsFilterMachineEl.value;
+  const category = partsFilterCategoryEl.value;
+  const status = partsFilterStatusEl.value;
+
+  const items = partsCache.filter((p) => {
+    if (machineId && p.machine_id !== machineId) return false;
+    if (category && p.category !== category) return false;
+    if (status) {
+      const st = statusFor(partsStockMap[p.part_id] || 0, p.reorder_point || 0);
+      if (st.label !== status) return false;
+    }
+    if (q) {
+      const hay = [p.part_id, p.name, p.category]
+        .map((v) => (v || '').toLowerCase())
+        .join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   if (!items.length) {
     partsTbody.innerHTML =
-      '<tr><td colspan="8" style="text-align:center;">No parts.</td></tr>';
+      '<tr><td colspan="8" style="text-align:center;">No parts match the filter.</td></tr>';
     return;
   }
 
@@ -578,7 +522,7 @@ function renderParts(stockMap, search = '') {
         machinesCache.find((m) => m.id === p.machine_id)?.name || '';
       const supplier =
         suppliersCacheLocal.find((s) => s.id === p.supplier_id)?.name || '';
-      const stock = stockMap[p.part_id] || 0;
+      const stock = partsStockMap[p.part_id] || 0;
       const st = statusFor(stock, p.reorder_point || 0);
       return `<tr>
         <td>${escapeHtml(p.part_id)}</td>
@@ -594,7 +538,17 @@ function renderParts(stockMap, search = '') {
     .join('');
 }
 
-partsSearchEl.addEventListener('input', () => loadParts());
+partsSearchEl.addEventListener('input', renderParts);
+partsFilterMachineEl.addEventListener('change', renderParts);
+partsFilterCategoryEl.addEventListener('change', renderParts);
+partsFilterStatusEl.addEventListener('change', renderParts);
+partsClearFilterBtn.addEventListener('click', () => {
+  partsSearchEl.value = '';
+  partsFilterMachineEl.value = '';
+  partsFilterCategoryEl.value = '';
+  partsFilterStatusEl.value = '';
+  renderParts();
+});
 
 // ---------- Movements tab (read-only, with new columns) ----------
 async function loadMovements() {
@@ -643,7 +597,6 @@ function renderMovements() {
     .map((m) => {
       const part = partsCache.find((p) => p.part_id === m.part_id);
       const usr = usersCache.find((u) => u.id === m.user_id);
-      const reqUsr = usersCache.find((u) => u.id === m.requested_by);
       const mach = machinesCache.find((mc) => mc.id === m.machine_id);
       return `<tr>
         <td>${formatDateTime(m.created_at)}</td>
@@ -655,7 +608,7 @@ function renderMovements() {
         <td>${escapeHtml(m.reference_no || '')}</td>
         <td>${escapeHtml(m.remarks || '')}</td>
         <td>${escapeHtml(usr?.name || '')}</td>
-        <td>${escapeHtml(reqUsr?.name || '')}</td>
+        <td>${escapeHtml(m.requested_by || '')}</td>
         <td>${escapeHtml(mach?.name || '')}</td>
       </tr>`;
     })
@@ -670,8 +623,15 @@ document.querySelector('#clear-mv-filter').addEventListener('click', () => {
   renderMovements();
 });
 
-// ---------- Maintenance tab (read-only) ----------
+// ---------- Maintenance tab (read-only, with filters) ----------
 // Maintenance entries are now created via the Log Movement OUT flow.
+const maintFilterMachineEl = document.querySelector('#maint-filter-machine');
+const maintFilterTypeEl = document.querySelector('#maint-filter-type');
+const maintFilterFromEl = document.querySelector('#maint-filter-from');
+const maintFilterToEl = document.querySelector('#maint-filter-to');
+const maintClearFilterBtn = document.querySelector('#maint-clear-filter');
+let maintenanceCache = [];
+
 async function loadMaintenance() {
   try {
     if (!machinesCache.length) await loadLookups();
@@ -681,18 +641,64 @@ async function loadMaintenance() {
       .select('*')
       .order('date', { ascending: false });
     if (error) throw error;
-    renderMaintenance(data || []);
+    maintenanceCache = data || [];
+    populateMaintFilters();
+    renderMaintenance();
   } catch (err) {
     console.error(err);
     showBanner('Failed to load maintenance: ' + (err.message || err), 'error');
   }
 }
 
-function renderMaintenance(rows) {
+/** Fill the Machine + Type dropdowns from cached data, preserving selection. */
+function populateMaintFilters() {
+  const prevMachine = maintFilterMachineEl.value;
+  const prevType = maintFilterTypeEl.value;
+
+  maintFilterMachineEl.innerHTML =
+    '<option value="">All machines</option>' +
+    machinesCache
+      .map(
+        (m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`
+      )
+      .join('');
+  if (prevMachine) maintFilterMachineEl.value = prevMachine;
+
+  const types = Array.from(
+    new Set(maintenanceCache.map((r) => r.type).filter(Boolean))
+  ).sort();
+  maintFilterTypeEl.innerHTML =
+    '<option value="">All types</option>' +
+    types.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (prevType) maintFilterTypeEl.value = prevType;
+}
+
+function renderMaintenance() {
   const tbody = document.querySelector('#maint-tbody');
+  const machineId = maintFilterMachineEl.value;
+  const typeVal = maintFilterTypeEl.value;
+  const fromVal = maintFilterFromEl.value;
+  const toVal = maintFilterToEl.value;
+  const fromTs = fromVal ? new Date(fromVal + 'T00:00:00').getTime() : null;
+  const toTs = toVal ? new Date(toVal + 'T23:59:59').getTime() : null;
+
+  const rows = maintenanceCache.filter((r) => {
+    if (machineId && r.machine_id !== machineId) return false;
+    if (typeVal && r.type !== typeVal) return false;
+    if (r.date) {
+      const t = new Date(r.date).getTime();
+      if (fromTs && t < fromTs) return false;
+      if (toTs && t > toTs) return false;
+    } else if (fromTs || toTs) {
+      // No date on the row but a date filter is set — exclude.
+      return false;
+    }
+    return true;
+  });
+
   if (!rows.length) {
     tbody.innerHTML =
-      '<tr><td colspan="9" style="text-align:center;">No maintenance entries.</td></tr>';
+      '<tr><td colspan="8" style="text-align:center;">No maintenance entries match the filter.</td></tr>';
     return;
   }
   const today = new Date();
@@ -717,12 +723,23 @@ function renderMaintenance(rows) {
         <td>${escapeHtml(r.parts_used || '')}</td>
         <td>${escapeHtml(r.technician || '')}</td>
         <td>${r.downtime_hrs ?? ''}</td>
-        <td>${formatPHP(r.cost || 0)}</td>
         <td>${escapeHtml(r.next_service_date || '')}</td>
       </tr>`;
     })
     .join('');
 }
+
+maintFilterMachineEl.addEventListener('change', renderMaintenance);
+maintFilterTypeEl.addEventListener('change', renderMaintenance);
+maintFilterFromEl.addEventListener('change', renderMaintenance);
+maintFilterToEl.addEventListener('change', renderMaintenance);
+maintClearFilterBtn.addEventListener('click', () => {
+  maintFilterMachineEl.value = '';
+  maintFilterTypeEl.value = '';
+  maintFilterFromEl.value = '';
+  maintFilterToEl.value = '';
+  renderMaintenance();
+});
 
 // ---------- Boot ----------
 (async () => {
@@ -735,7 +752,7 @@ function renderMaintenance(rows) {
   // Honor #hash on first load (e.g. /worker.html#movement).
   const hash = window.location.hash.replace('#', '');
   const valid = [
-    'dashboard', 'stock', 'movement', 'parts', 'movements', 'maintenance',
+    'dashboard', 'movement', 'parts', 'movements', 'maintenance',
   ];
   activateTab(valid.includes(hash) ? hash : 'dashboard');
 })();

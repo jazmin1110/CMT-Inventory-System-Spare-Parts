@@ -75,6 +75,19 @@
 
         <div class="search-bar">
           <input type="search" id="parts-search" placeholder="Search by name, part ID, or category..." />
+          <select id="parts-filter-machine">
+            <option value="">All machines</option>
+          </select>
+          <select id="parts-filter-category">
+            <option value="">All categories</option>
+          </select>
+          <select id="parts-filter-status">
+            <option value="">All statuses</option>
+            <option value="REORDER">REORDER</option>
+            <option value="LOW">LOW</option>
+            <option value="OK">OK</option>
+          </select>
+          <button class="btn btn-secondary" id="parts-clear-filter" type="button">Clear</button>
           <button class="btn" id="show-add-part">+ Add Part</button>
         </div>
 
@@ -164,16 +177,32 @@
           OUT movement with the maintenance toggle enabled.
         </p>
 
+        <div class="search-bar">
+          <select id="maint-filter-machine">
+            <option value="">All machines</option>
+          </select>
+          <select id="maint-filter-type">
+            <option value="">All types</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px;">
+            From <input type="date" id="maint-filter-from" />
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            To <input type="date" id="maint-filter-to" />
+          </label>
+          <button class="btn btn-secondary" id="maint-clear-filter" type="button">Clear</button>
+        </div>
+
         <div class="table-wrap">
           <table class="data">
             <thead>
               <tr>
                 <th>Date</th><th>Machine</th><th>Type</th><th>Work Done</th>
                 <th>Parts Used</th><th>Technician</th><th>Downtime</th>
-                <th>Cost</th><th>Next Service</th>
+                <th>Next Service</th>
               </tr>
             </thead>
-            <tbody id="maint-tbody"><tr><td colspan="9">Loading...</td></tr></tbody>
+            <tbody id="maint-tbody"><tr><td colspan="8">Loading...</td></tr></tbody>
           </table>
         </div>
       </section>

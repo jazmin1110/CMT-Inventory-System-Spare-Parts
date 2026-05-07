@@ -16,7 +16,6 @@
       <div class="brand">CMT Spare Parts</div>
       <nav class="nav" id="main-nav">
         <a href="#dashboard" data-tab="dashboard" class="active">Dashboard</a>
-        <a href="#stock" data-tab="stock">Stock</a>
         <a href="#movement" data-tab="movement">Log Movement</a>
         <a href="#parts" data-tab="parts">Parts</a>
         <a href="#movements" data-tab="movements">Movements</a>
@@ -66,21 +65,6 @@
               <tr><td colspan="6">Loading...</td></tr>
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <!-- Stock tab (card list — workers prefer this for quick lookup) -->
-      <section id="tab-stock" class="section">
-        <h2>Current Stock</h2>
-        <div class="search-bar">
-          <input
-            type="search"
-            id="stock-search"
-            placeholder="Search by part name..."
-          />
-        </div>
-        <div id="stock-list" class="stock-list">
-          <div class="card">Loading stock...</div>
         </div>
       </section>
 
@@ -142,14 +126,19 @@
                 <input type="hidden" id="qty-val" value="1" />
               </div>
 
-              <!-- New: who is requesting + which machine.
-                   These fields auto-show only when Move Type = OUT, since
-                   IN / ADJUST entries don't have a "requesting worker". -->
+              <!-- Who is requesting + which machine. Auto-shown only when
+                   Move Type = OUT, since IN / ADJUST entries don't have a
+                   requesting worker. Requested by is free-form text so any
+                   name (worker, line lead, etc.) can be entered. -->
               <div class="form-row big" id="row-requested-by" style="display:none;">
                 <label for="requested-by">Requested by</label>
-                <select id="requested-by" name="requested_by">
-                  <option value="">— Select worker —</option>
-                </select>
+                <input
+                  type="text"
+                  id="requested-by"
+                  name="requested_by"
+                  autocomplete="off"
+                  placeholder="Worker name"
+                />
               </div>
               <div class="form-row big" id="row-machine" style="display:none;">
                 <label for="machine">Machine</label>
@@ -187,10 +176,6 @@
                     <div class="form-row">
                       <label>Downtime (hrs)</label>
                       <input type="number" step="0.1" id="maint-downtime" name="maint_downtime" />
-                    </div>
-                    <div class="form-row">
-                      <label>Cost (PHP)</label>
-                      <input type="number" step="0.01" id="maint-cost" name="maint_cost" />
                     </div>
                     <div class="form-row full">
                       <label>Work Done</label>
@@ -232,6 +217,19 @@
         <h2>Parts</h2>
         <div class="search-bar">
           <input type="search" id="parts-search" placeholder="Search by name, part ID, or category..." />
+          <select id="parts-filter-machine">
+            <option value="">All machines</option>
+          </select>
+          <select id="parts-filter-category">
+            <option value="">All categories</option>
+          </select>
+          <select id="parts-filter-status">
+            <option value="">All statuses</option>
+            <option value="REORDER">REORDER</option>
+            <option value="LOW">LOW</option>
+            <option value="OK">OK</option>
+          </select>
+          <button class="btn btn-secondary" id="parts-clear-filter" type="button">Clear</button>
         </div>
         <div class="table-wrap">
           <table class="data">
@@ -290,16 +288,32 @@
           movement with the maintenance toggle enabled.
         </p>
 
+        <div class="search-bar">
+          <select id="maint-filter-machine">
+            <option value="">All machines</option>
+          </select>
+          <select id="maint-filter-type">
+            <option value="">All types</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px;">
+            From <input type="date" id="maint-filter-from" />
+          </label>
+          <label style="display:flex; align-items:center; gap:6px;">
+            To <input type="date" id="maint-filter-to" />
+          </label>
+          <button class="btn btn-secondary" id="maint-clear-filter" type="button">Clear</button>
+        </div>
+
         <div class="table-wrap">
           <table class="data">
             <thead>
               <tr>
                 <th>Date</th><th>Machine</th><th>Type</th><th>Work Done</th>
                 <th>Parts Used</th><th>Technician</th><th>Downtime</th>
-                <th>Cost</th><th>Next Service</th>
+                <th>Next Service</th>
               </tr>
             </thead>
-            <tbody id="maint-tbody"><tr><td colspan="9">Loading...</td></tr></tbody>
+            <tbody id="maint-tbody"><tr><td colspan="8">Loading...</td></tr></tbody>
           </table>
         </div>
       </section>
