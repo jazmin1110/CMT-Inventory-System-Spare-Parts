@@ -50,12 +50,23 @@ npm install
 npm run dev      # http://localhost:5173
 ```
 
+Open the app on your iPad/laptop on the same Wi-Fi network using the
+"Network" URL printed by Vite (e.g. `http://192.168.x.x:5173`).
+
 Builds:
 
 ```bash
 npm run build    # outputs to /dist
 npm run preview  # serve the production build
 ```
+
+> **Important — do NOT use `python -m http.server`, `live-server`, or any
+> other plain static file server to run this app.** The source code uses
+> bare ES module imports (e.g. `import { createClient } from '@supabase/supabase-js'`)
+> which only Vite (or another bundler) can resolve. With a plain static
+> server the page will render but every button will be inert because the
+> JS modules silently fail to load. Always use `npm run dev` (or
+> `npm run build && npm run preview`).
 
 ## Configuration
 

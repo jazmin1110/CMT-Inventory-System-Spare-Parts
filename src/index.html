@@ -37,8 +37,42 @@
       </div>
     </main>
 
+    <!-- Safety net: if the ES module below fails to load (e.g. because the
+         page is being served by a plain static file server like
+         `python -m http.server` that can't resolve bare imports), this
+         banner is shown after 1.5s. When Vite is running, the module sets
+         window.__cmtBooted=true before the timeout fires and the banner
+         never appears. -->
+    <div
+      id="boot-error"
+      style="display:none; position:fixed; left:0; right:0; bottom:0;
+             background:#dc2626; color:white; padding:14px 18px;
+             font-family:system-ui, sans-serif; font-size:0.95rem; z-index:9999;"
+    >
+      <strong>App failed to start.</strong>
+      Run <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
+      border-radius:4px;">npm run dev</code> from the project folder and open
+      <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
+      border-radius:4px;">http://localhost:5173</code>. A plain static file
+      server (python http.server, etc.) cannot run this app because the
+      browser can't resolve bare module imports like
+      <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
+      border-radius:4px;">@supabase/supabase-js</code>.
+    </div>
+    <script>
+      window.__cmtBooted = false;
+      setTimeout(function () {
+        if (!window.__cmtBooted) {
+          var el = document.getElementById('boot-error');
+          if (el) el.style.display = 'block';
+        }
+      }, 1500);
+    </script>
+
     <script type="module">
       import { initLoginScreen, getUser } from './js/auth.js';
+
+      window.__cmtBooted = true;
 
       // If already signed in, jump straight to the right home screen.
       const existing = getUser();
