@@ -22,66 +22,174 @@
       </div>
 
       <div id="pin-pad" class="pin-pad">
-        <button class="pin-key" data-key="1">1</button>
-        <button class="pin-key" data-key="2">2</button>
-        <button class="pin-key" data-key="3">3</button>
-        <button class="pin-key" data-key="4">4</button>
-        <button class="pin-key" data-key="5">5</button>
-        <button class="pin-key" data-key="6">6</button>
-        <button class="pin-key" data-key="7">7</button>
-        <button class="pin-key" data-key="8">8</button>
-        <button class="pin-key" data-key="9">9</button>
-        <button class="pin-key action" data-key="clear">Clear</button>
-        <button class="pin-key" data-key="0">0</button>
-        <button class="pin-key action" data-key="back">⌫</button>
+        <button type="button" class="pin-key" data-key="1">1</button>
+        <button type="button" class="pin-key" data-key="2">2</button>
+        <button type="button" class="pin-key" data-key="3">3</button>
+        <button type="button" class="pin-key" data-key="4">4</button>
+        <button type="button" class="pin-key" data-key="5">5</button>
+        <button type="button" class="pin-key" data-key="6">6</button>
+        <button type="button" class="pin-key" data-key="7">7</button>
+        <button type="button" class="pin-key" data-key="8">8</button>
+        <button type="button" class="pin-key" data-key="9">9</button>
+        <button type="button" class="pin-key action" data-key="clear">Clear</button>
+        <button type="button" class="pin-key" data-key="0">0</button>
+        <button type="button" class="pin-key action" data-key="back">⌫</button>
       </div>
     </main>
 
-    <!-- Safety net: if the ES module below fails to load (e.g. because the
-         page is being served by a plain static file server like
-         `python -m http.server` that can't resolve bare imports), this
-         banner is shown after 1.5s. When Vite is running, the module sets
-         window.__cmtBooted=true before the timeout fires and the banner
-         never appears. -->
-    <div
-      id="boot-error"
-      style="display:none; position:fixed; left:0; right:0; bottom:0;
-             background:#dc2626; color:white; padding:14px 18px;
-             font-family:system-ui, sans-serif; font-size:0.95rem; z-index:9999;"
-    >
-      <strong>App failed to start.</strong>
-      Run <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
-      border-radius:4px;">npm run dev</code> from the project folder and open
-      <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
-      border-radius:4px;">http://localhost:5173</code>. A plain static file
-      server (python http.server, etc.) cannot run this app because the
-      browser can't resolve bare module imports like
-      <code style="background:rgba(0,0,0,0.25); padding:2px 6px;
-      border-radius:4px;">@supabase/supabase-js</code>.
-    </div>
+    <!--
+      The PIN-pad UI is intentionally written as a plain (non-module)
+      inline script so it works the moment the HTML is parsed — no
+      bundler, no network round-trips, no import resolution required.
+      The Supabase login is loaded lazily as an ES module only when the
+      user enters all 4 digits; if that import fails, we surface a
+      clear error banner instead of leaving the pad inert.
+    -->
     <script>
-      window.__cmtBooted = false;
-      setTimeout(function () {
-        if (!window.__cmtBooted) {
-          var el = document.getElementById('boot-error');
-          if (el) el.style.display = 'block';
+      (function () {
+        var dotsEl = document.getElementById('pin-dots');
+        var padEl = document.getElementById('pin-pad');
+        if (!dotsEl || !padEl) return;
+
+        // If a previous session is still in localStorage, jump to that home.
+        try {
+          var raw = localStorage.getItem('cmt_user');
+          if (raw) {
+            var u = JSON.parse(raw);
+            window.location.href =
+              u && u.role === 'manager' ? './dashboard.html' : './worker.html';
+            return;
+          }
+        } catch (e) { /* ignore parse errors */ }
+
+        var pin = '';
+        var busy = false;
+
+        function renderDots() {
+          var dots = dotsEl.children;
+          for (var i = 0; i < dots.length; i++) {
+            dots[i].classList.toggle('filled', i < pin.length);
+          }
         }
-      }, 1500);
-    </script>
 
-    <script type="module">
-      import { initLoginScreen, getUser } from './js/auth.js';
+        function shake() {
+          dotsEl.classList.remove('shake');
+          // Force reflow so the animation restarts even on rapid retries.
+          void dotsEl.offsetWidth;
+          dotsEl.classList.add('shake');
+        }
 
-      window.__cmtBooted = true;
+        function showBanner(text, type) {
+          var el = document.createElement('div');
+          el.className = 'banner ' + (type || 'info');
+          el.textContent = text;
+          document.body.appendChild(el);
+          setTimeout(function () { el.remove(); }, 4000);
+        }
 
-      // If already signed in, jump straight to the right home screen.
-      const existing = getUser();
-      if (existing) {
-        window.location.href =
-          existing.role === 'manager' ? './dashboard.html' : './worker.html';
-      } else {
-        initLoginScreen();
-      }
+        // SHA-256 hex via Web Crypto. Available in every modern browser
+        // when served over http://localhost or https://.
+        function sha256Hex(text) {
+          var buf = new TextEncoder().encode(text);
+          return crypto.subtle.digest('SHA-256', buf).then(function (h) {
+            var out = '';
+            var arr = new Uint8Array(h);
+            for (var i = 0; i < arr.length; i++) {
+              var s = arr[i].toString(16);
+              out += s.length === 1 ? '0' + s : s;
+            }
+            return out;
+          });
+        }
+
+        // Lazy-load the Supabase client only when we actually need it.
+        var supabasePromise = null;
+        function getSupabase() {
+          if (!supabasePromise) {
+            supabasePromise = import('./js/supabase.js').then(function (m) {
+              return m.supabase;
+            });
+          }
+          return supabasePromise;
+        }
+
+        function tryLogin() {
+          if (busy) return;
+          busy = true;
+
+          // Visual hint that we're working — fill all 4 dots solid.
+          renderDots();
+
+          sha256Hex(pin)
+            .then(function (hash) {
+              return getSupabase().then(function (supabase) {
+                return supabase
+                  .from('users')
+                  .select('id, name, role')
+                  .eq('pin', hash)
+                  .maybeSingle();
+              });
+            })
+            .then(function (res) {
+              if (res && res.error) throw res.error;
+              var data = res && res.data;
+              if (data) {
+                localStorage.setItem(
+                  'cmt_user',
+                  JSON.stringify({ id: data.id, name: data.name, role: data.role })
+                );
+                window.location.href =
+                  data.role === 'manager'
+                    ? './dashboard.html'
+                    : './worker.html';
+                return;
+              }
+              shake();
+              pin = '';
+              renderDots();
+              busy = false;
+            })
+            .catch(function (err) {
+              console.error('[login] failed:', err);
+              showBanner(
+                'Login failed: ' + (err && err.message ? err.message : err),
+                'error'
+              );
+              shake();
+              pin = '';
+              renderDots();
+              busy = false;
+            });
+        }
+
+        function press(value) {
+          if (busy) return;
+          if (value === 'back') {
+            pin = pin.slice(0, -1);
+          } else if (value === 'clear') {
+            pin = '';
+          } else if (/^[0-9]$/.test(value) && pin.length < 4) {
+            pin += value;
+          }
+          renderDots();
+          if (pin.length === 4) tryLogin();
+        }
+
+        padEl.addEventListener('click', function (e) {
+          var btn = e.target.closest('button[data-key]');
+          if (!btn) return;
+          press(btn.getAttribute('data-key'));
+        });
+
+        // Allow physical keyboard for desktop testing.
+        document.addEventListener('keydown', function (e) {
+          if (/^[0-9]$/.test(e.key)) press(e.key);
+          else if (e.key === 'Backspace') press('back');
+          else if (e.key === 'Escape') press('clear');
+        });
+
+        renderDots();
+      })();
     </script>
   </body>
 </html>
