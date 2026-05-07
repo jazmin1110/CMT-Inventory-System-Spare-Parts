@@ -23,6 +23,7 @@
       </nav>
       <div class="user">
         <span class="name" id="user-name"></span>
+        <button class="logout" id="change-pin-btn" type="button" style="margin-right:8px;">Change PIN</button>
         <button class="logout" id="logout-btn">Log out</button>
       </div>
     </header>
@@ -241,13 +242,78 @@
         <div class="table-wrap">
           <table class="data">
             <thead>
-              <tr><th>Name</th><th>Role</th><th>PIN</th></tr>
+              <tr><th>Name</th><th>Role</th><th>PIN</th><th>Actions</th></tr>
             </thead>
-            <tbody id="users-tbody"><tr><td colspan="3">Loading...</td></tr></tbody>
+            <tbody id="users-tbody"><tr><td colspan="4">Loading...</td></tr></tbody>
           </table>
         </div>
       </section>
     </main>
+
+    <!-- Change PIN modal (self-service) -->
+    <div class="modal-bg" id="change-pin-modal">
+      <div class="modal">
+        <h3>Change my PIN</h3>
+        <form id="change-pin-form">
+          <div class="form-grid">
+            <div class="form-row full">
+              <label>Current PIN</label>
+              <input type="password" id="cp-old" name="old_pin"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="current-password" required />
+            </div>
+            <div class="form-row full">
+              <label>New PIN (4 digits)</label>
+              <input type="password" id="cp-new" name="new_pin"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+            <div class="form-row full">
+              <label>Confirm new PIN</label>
+              <input type="password" id="cp-new2" name="new_pin_confirm"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="cp-cancel">Cancel</button>
+            <button class="btn btn-green" type="submit" id="cp-save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Reset PIN modal (manager-only, per user) -->
+    <div class="modal-bg" id="reset-pin-modal">
+      <div class="modal">
+        <h3>Reset PIN</h3>
+        <p style="color:var(--gray-text); margin-top:0;">
+          Setting a new PIN for <strong id="rp-user-name"></strong>.
+          The new PIN takes effect immediately.
+        </p>
+        <form id="reset-pin-form">
+          <input type="hidden" id="rp-user-id" />
+          <div class="form-grid">
+            <div class="form-row full">
+              <label>New PIN (4 digits)</label>
+              <input type="password" id="rp-new" name="new_pin"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+            <div class="form-row full">
+              <label>Confirm new PIN</label>
+              <input type="password" id="rp-new2" name="new_pin_confirm"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="rp-cancel">Cancel</button>
+            <button class="btn btn-green" type="submit" id="rp-save">Reset PIN</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <!-- QR modal -->
     <div class="modal-bg" id="qr-modal">

@@ -4,7 +4,7 @@
 // and the parts table omits Unit Cost; otherwise much of the read logic
 // mirrors js/dashboard.js so workers and managers see the same data.
 import { supabase } from './supabase.js';
-import { requireRole, logout, showBanner } from './auth.js';
+import { requireRole, logout, showBanner, changePin } from './auth.js';
 import { startQRScan } from './qr.js';
 
 // Guard: any signed-in user can reach this page.
@@ -13,6 +13,56 @@ if (!user) throw new Error('not signed in');
 
 document.querySelector('#user-name').textContent = user.name;
 document.querySelector('#logout-btn').addEventListener('click', logout);
+
+// ---------- Change PIN (self-service) ----------
+const changePinModal = document.querySelector('#change-pin-modal');
+const changePinForm = document.querySelector('#change-pin-form');
+const cpOld = document.querySelector('#cp-old');
+const cpNew = document.querySelector('#cp-new');
+const cpNew2 = document.querySelector('#cp-new2');
+const cpSaveBtn = document.querySelector('#cp-save');
+
+function openChangePinModal() {
+  changePinForm.reset();
+  changePinModal.classList.add('open');
+  setTimeout(() => cpOld.focus(), 0);
+}
+function closeChangePinModal() {
+  changePinModal.classList.remove('open');
+  changePinForm.reset();
+}
+document.querySelector('#change-pin-btn').addEventListener('click', openChangePinModal);
+document.querySelector('#cp-cancel').addEventListener('click', closeChangePinModal);
+changePinModal.addEventListener('click', (e) => {
+  if (e.target === changePinModal) closeChangePinModal();
+});
+
+changePinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const oldPin = cpOld.value.trim();
+  const newPin = cpNew.value.trim();
+  const newPin2 = cpNew2.value.trim();
+
+  if (newPin !== newPin2) {
+    showBanner('New PINs do not match.', 'error');
+    return;
+  }
+
+  const original = cpSaveBtn.innerHTML;
+  cpSaveBtn.disabled = true;
+  cpSaveBtn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await changePin(oldPin, newPin);
+    showBanner('PIN updated. Use the new PIN next time you log in.', 'success');
+    closeChangePinModal();
+  } catch (err) {
+    console.error(err);
+    showBanner(err.message || String(err), 'error');
+  } finally {
+    cpSaveBtn.disabled = false;
+    cpSaveBtn.innerHTML = original;
+  }
+});
 
 // ---------- Tab switching ----------
 const navLinks = document.querySelectorAll('#main-nav a');

@@ -145,6 +145,63 @@ export function initLoginScreen() {
   renderDots();
 }
 
+/**
+ * Self-service PIN change. Verifies the current PIN against `users.pin`
+ * for the currently signed-in user, then writes the new hashed PIN.
+ *
+ * Throws on validation / Supabase errors so the caller can show a banner.
+ */
+export async function changePin(oldPin, newPin) {
+  const u = getUser();
+  if (!u) throw new Error('Not signed in.');
+  if (!/^\d{4}$/.test(oldPin)) throw new Error('Current PIN must be 4 digits.');
+  if (!/^\d{4}$/.test(newPin)) throw new Error('New PIN must be 4 digits.');
+  if (oldPin === newPin) {
+    throw new Error('New PIN must be different from current PIN.');
+  }
+
+  const oldHash = await sha256Hex(oldPin);
+
+  // Re-fetch the row to verify the old PIN before overwriting it. This way a
+  // stolen / shared browser session can't silently rotate the PIN without
+  // knowing the current one.
+  const { data: existing, error: fetchErr } = await supabase
+    .from('users')
+    .select('id, pin')
+    .eq('id', u.id)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!existing) throw new Error('User not found.');
+  if (existing.pin !== oldHash) throw new Error('Current PIN is incorrect.');
+
+  const newHash = await sha256Hex(newPin);
+  const { error: updErr } = await supabase
+    .from('users')
+    .update({ pin: newHash })
+    .eq('id', u.id);
+  if (updErr) throw updErr;
+}
+
+/**
+ * Manager-only PIN reset for another user. Does NOT require the old PIN —
+ * managers reset PINs because workers forgot them.
+ */
+export async function setUserPin(userId, newPin) {
+  const me = getUser();
+  if (!me || me.role !== 'manager') {
+    throw new Error('Only managers can reset PINs.');
+  }
+  if (!/^\d{4}$/.test(newPin)) throw new Error('New PIN must be 4 digits.');
+  if (!userId) throw new Error('Missing target user.');
+
+  const newHash = await sha256Hex(newPin);
+  const { error } = await supabase
+    .from('users')
+    .update({ pin: newHash })
+    .eq('id', userId);
+  if (error) throw error;
+}
+
 /** Tiny toast banner used by login + other screens. */
 export function showBanner(text, type = 'info', timeoutMs = 3500) {
   const el = document.createElement('div');

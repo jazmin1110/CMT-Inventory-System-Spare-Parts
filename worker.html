@@ -23,9 +23,43 @@
       </nav>
       <div class="user">
         <span class="name" id="user-name"></span>
+        <button class="logout" id="change-pin-btn" type="button" style="margin-right:8px;">Change PIN</button>
         <button class="logout" id="logout-btn">Log out</button>
       </div>
     </header>
+
+    <!-- Change PIN modal (self-service) -->
+    <div class="modal-bg" id="change-pin-modal">
+      <div class="modal">
+        <h3>Change my PIN</h3>
+        <form id="change-pin-form">
+          <div class="form-grid">
+            <div class="form-row full">
+              <label>Current PIN</label>
+              <input type="password" id="cp-old" name="old_pin"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="current-password" required />
+            </div>
+            <div class="form-row full">
+              <label>New PIN (4 digits)</label>
+              <input type="password" id="cp-new" name="new_pin"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+            <div class="form-row full">
+              <label>Confirm new PIN</label>
+              <input type="password" id="cp-new2" name="new_pin_confirm"
+                     inputmode="numeric" pattern="[0-9]{4}" maxlength="4"
+                     autocomplete="new-password" required />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-secondary" type="button" id="cp-cancel">Cancel</button>
+            <button class="btn btn-green" type="submit" id="cp-save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <main class="page">
       <!-- Dashboard tab (no inventory value) -->

@@ -1,7 +1,14 @@
 // Manager dashboard logic.
 // Handles all five tabs (Dashboard, Parts, Movements, Maintenance, Users).
 import { supabase } from './supabase.js';
-import { requireRole, logout, showBanner, sha256Hex } from './auth.js';
+import {
+  requireRole,
+  logout,
+  showBanner,
+  sha256Hex,
+  changePin,
+  setUserPin,
+} from './auth.js';
 
 // Guard: only managers can see this page.
 const user = requireRole('manager');
@@ -9,6 +16,113 @@ if (!user) throw new Error('not a manager');
 
 document.querySelector('#user-name').textContent = user.name;
 document.querySelector('#logout-btn').addEventListener('click', logout);
+
+// ---------- Change PIN (self-service) ----------
+const changePinModal = document.querySelector('#change-pin-modal');
+const changePinForm = document.querySelector('#change-pin-form');
+const cpOld = document.querySelector('#cp-old');
+const cpNew = document.querySelector('#cp-new');
+const cpNew2 = document.querySelector('#cp-new2');
+const cpSaveBtn = document.querySelector('#cp-save');
+
+function openChangePinModal() {
+  changePinForm.reset();
+  changePinModal.classList.add('open');
+  setTimeout(() => cpOld.focus(), 0);
+}
+function closeChangePinModal() {
+  changePinModal.classList.remove('open');
+  changePinForm.reset();
+}
+document.querySelector('#change-pin-btn').addEventListener('click', openChangePinModal);
+document.querySelector('#cp-cancel').addEventListener('click', closeChangePinModal);
+changePinModal.addEventListener('click', (e) => {
+  if (e.target === changePinModal) closeChangePinModal();
+});
+
+changePinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const oldPin = cpOld.value.trim();
+  const newPin = cpNew.value.trim();
+  const newPin2 = cpNew2.value.trim();
+
+  if (newPin !== newPin2) {
+    showBanner('New PINs do not match.', 'error');
+    return;
+  }
+
+  const original = cpSaveBtn.innerHTML;
+  cpSaveBtn.disabled = true;
+  cpSaveBtn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await changePin(oldPin, newPin);
+    showBanner('PIN updated. Use the new PIN next time you log in.', 'success');
+    closeChangePinModal();
+  } catch (err) {
+    console.error(err);
+    showBanner(err.message || String(err), 'error');
+  } finally {
+    cpSaveBtn.disabled = false;
+    cpSaveBtn.innerHTML = original;
+  }
+});
+
+// ---------- Reset PIN (manager-only, per user) ----------
+const resetPinModal = document.querySelector('#reset-pin-modal');
+const resetPinForm = document.querySelector('#reset-pin-form');
+const rpUserId = document.querySelector('#rp-user-id');
+const rpUserName = document.querySelector('#rp-user-name');
+const rpNew = document.querySelector('#rp-new');
+const rpNew2 = document.querySelector('#rp-new2');
+const rpSaveBtn = document.querySelector('#rp-save');
+
+function openResetPinModal(targetUser) {
+  resetPinForm.reset();
+  rpUserId.value = targetUser.id;
+  rpUserName.textContent = targetUser.name || '';
+  resetPinModal.classList.add('open');
+  setTimeout(() => rpNew.focus(), 0);
+}
+function closeResetPinModal() {
+  resetPinModal.classList.remove('open');
+  resetPinForm.reset();
+  rpUserId.value = '';
+}
+document.querySelector('#rp-cancel').addEventListener('click', closeResetPinModal);
+resetPinModal.addEventListener('click', (e) => {
+  if (e.target === resetPinModal) closeResetPinModal();
+});
+
+resetPinForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const targetId = rpUserId.value;
+  const newPin = rpNew.value.trim();
+  const newPin2 = rpNew2.value.trim();
+
+  if (newPin !== newPin2) {
+    showBanner('New PINs do not match.', 'error');
+    return;
+  }
+
+  const original = rpSaveBtn.innerHTML;
+  rpSaveBtn.disabled = true;
+  rpSaveBtn.innerHTML = '<span class="spinner"></span> Saving...';
+  try {
+    await setUserPin(targetId, newPin);
+    const target = usersCache.find((u) => u.id === targetId);
+    showBanner(
+      'PIN reset for ' + (target?.name || 'user') + '.',
+      'success'
+    );
+    closeResetPinModal();
+  } catch (err) {
+    console.error(err);
+    showBanner(err.message || String(err), 'error');
+  } finally {
+    rpSaveBtn.disabled = false;
+    rpSaveBtn.innerHTML = original;
+  }
+});
 
 // ---------- Tab switching ----------
 const navLinks = document.querySelectorAll('#main-nav a');
@@ -717,6 +831,8 @@ maintClearFilterBtn.addEventListener('click', () => {
 });
 
 // ---------- Users tab ----------
+const usersTbody = document.querySelector('#users-tbody');
+
 async function loadUsers() {
   try {
     const { data, error } = await supabase
@@ -725,18 +841,20 @@ async function loadUsers() {
       .order('name');
     if (error) throw error;
     usersCache = data || [];
-    const tbody = document.querySelector('#users-tbody');
     if (!usersCache.length) {
-      tbody.innerHTML =
-        '<tr><td colspan="3" style="text-align:center;">No users.</td></tr>';
+      usersTbody.innerHTML =
+        '<tr><td colspan="4" style="text-align:center;">No users.</td></tr>';
       return;
     }
-    tbody.innerHTML = usersCache
+    usersTbody.innerHTML = usersCache
       .map(
         (u) => `<tr>
           <td>${escapeHtml(u.name)}</td>
           <td>${escapeHtml(u.role)}</td>
           <td>••••</td>
+          <td>
+            <button class="btn btn-secondary btn-reset-pin" data-id="${escapeHtml(u.id)}">Reset PIN</button>
+          </td>
         </tr>`
       )
       .join('');
@@ -745,6 +863,15 @@ async function loadUsers() {
     showBanner('Failed to load users: ' + (err.message || err), 'error');
   }
 }
+
+// Delegate row clicks to the Reset PIN button.
+usersTbody.addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-reset-pin');
+  if (!btn) return;
+  const target = usersCache.find((u) => String(u.id) === String(btn.dataset.id));
+  if (!target) return;
+  openResetPinModal(target);
+});
 
 document.querySelector('#show-add-user').addEventListener('click', () => {
   document.querySelector('#add-user-card').style.display = 'block';
