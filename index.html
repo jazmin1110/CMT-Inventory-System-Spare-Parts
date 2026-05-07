@@ -38,26 +38,13 @@
     </main>
 
     <!--
-      Login screen is intentionally self-contained:
-        * The PIN-pad UI runs as plain (non-module) inline JS so buttons
-          respond instantly, regardless of bundler / network / cache.
-        * Supabase is loaded as an ES module from a CDN (esm.sh) — that
-          URL needs no bundler, no relative path, and no .env. It works
-          under `npm run dev`, `npm run preview`, or even file://.
-      Once signed in, the worker / dashboard pages still use the bundled
-      npm version of @supabase/supabase-js as before.
+      The PIN-pad UI runs as plain (non-module) inline JS so the buttons
+      respond instantly the moment the HTML parses — no bundler, no
+      module wait. The Supabase client is loaded lazily from the shared
+      js/supabase.js (which itself imports from a CDN) only when the user
+      finishes typing 4 digits, so the network round-trip happens during
+      the login attempt and never blocks the UI.
     -->
-    <script>
-      // The Supabase project URL + anon key. They are inlined here on
-      // purpose: the anon key is meant to be exposed on the public web,
-      // it's the same key that's already in import.meta.env for the rest
-      // of the app. Row Level Security in Supabase is what actually
-      // protects the data.
-      window.__CMT_SUPABASE_URL = 'https://kmxyzefizirgjbcznvei.supabase.co';
-      window.__CMT_SUPABASE_ANON_KEY =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtteHl6ZWZpemlyZ2piY3pudmVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxMjMwOTMsImV4cCI6MjA5MzY5OTA5M30.fHwmf6fiYXrXf6jXS8sUcPUMLeFPyxfq9jy1lGQ-2Yw';
-    </script>
-
     <script>
       (function () {
         var dotsEl = document.getElementById('pin-dots');
@@ -115,19 +102,14 @@
           });
         }
 
-        // Lazy-load the Supabase client from a CDN ESM URL so the login
-        // screen has no bundler/file-path dependencies. Cached after first call.
+        // Lazy-load the shared Supabase client. It's a single source of
+        // truth — js/supabase.js is the same module the worker and
+        // dashboard pages use. Cached after first call.
         var supabasePromise = null;
         function getSupabase() {
           if (!supabasePromise) {
-            supabasePromise = import(
-              'https://esm.sh/@supabase/supabase-js@2'
-            ).then(function (m) {
-              return m.createClient(
-                window.__CMT_SUPABASE_URL,
-                window.__CMT_SUPABASE_ANON_KEY,
-                { auth: { persistSession: false } }
-              );
+            supabasePromise = import('./js/supabase.js').then(function (m) {
+              return m.supabase;
             });
           }
           return supabasePromise;

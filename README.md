@@ -1,34 +1,34 @@
 # CMT Inventory System — Spare Parts
 
 A simple spare parts inventory web app for a garment factory in the Philippines.
-Plain HTML / CSS / JavaScript built with [Vite](https://vitejs.dev), backed by
-[Supabase](https://supabase.com) (Postgres + REST + auth).
+Plain HTML, CSS, and JavaScript — **no build step**, no `npm install`, no
+bundler. Backed by [Supabase](https://supabase.com), deployable to
+[Vercel](https://vercel.com) by uploading the folder.
 
-> Three screens:
->
-> - **Login (PIN pad)** — `index.html`
-> - **Worker home** — `worker.html` (log movements, view stock)
-> - **Manager dashboard** — `dashboard.html` (parts / movements / maintenance / users)
+## Screens
 
-## Project structure
+- **Login (PIN pad)** — `index.html`
+- **Worker home** — `worker.html` (log movements, view stock)
+- **Manager dashboard** — `dashboard.html` (parts / movements / maintenance / users)
+
+## Project layout
 
 ```
-/src
-  index.html         ← login screen (PIN pad)
-  worker.html        ← warehouse worker home
-  dashboard.html     ← manager dashboard
-  /js
-    supabase.js      ← Supabase client init
-    auth.js          ← PIN login + role guards
-    worker.js        ← worker screen logic
-    dashboard.js     ← manager dashboard logic
-    qr.js            ← QR scanning logic (jsQR)
-  /css
-    style.css        ← shared styles (CSS custom properties)
-vite.config.js
-package.json
-.env                 ← VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY
+index.html          login screen (PIN pad)
+worker.html         warehouse worker home
+dashboard.html      manager dashboard
+css/style.css       shared styles
+js/supabase.js      Supabase client (loaded from esm.sh CDN)
+js/auth.js          PIN login + role guards
+js/worker.js        worker screen logic
+js/dashboard.js     manager dashboard logic
+js/qr.js            QR scanning helper (jsQR via CDN)
 ```
+
+External libraries are loaded straight from CDNs:
+- `@supabase/supabase-js@2` from `https://esm.sh/`
+- `jsQR` from `cdnjs.cloudflare.com` (in `worker.html`)
+- `qrcodejs` from `cdnjs.cloudflare.com` (in `dashboard.html`)
 
 ## Database tables (must already exist in Supabase)
 
@@ -39,70 +39,70 @@ package.json
 - `machines (id, name)`
 - `suppliers (id, name)`
 
-The current PIN values stored in `users.pin` must be **SHA-256 hex** (lowercase)
-of the 4-digit PIN — the login screen hashes whatever the user types and looks
-up the hash directly.
+The `users.pin` column stores the **SHA-256 hex** (lowercase) of the 4-digit
+PIN — the login screen hashes whatever the user types and looks up the hash
+directly.
 
-## Running locally
+> **Row Level Security**: the Supabase anon key is publicly embedded in
+> `js/supabase.js` (it's designed to be public). What actually protects the
+> data is RLS — make sure the `anon` role has the policies it needs to
+> `select` / `insert` / `update` on each table for the app to work.
 
-```bash
-npm install
-npm run dev      # http://localhost:5173
-```
+## Run locally
 
-Open the app on your iPad/laptop on the same Wi-Fi network using the
-"Network" URL printed by Vite (e.g. `http://192.168.x.x:5173`).
-
-Builds:
+You need **any** static file server. The simplest options:
 
 ```bash
-npm run build    # outputs to /dist
-npm run preview  # serve the production build
+# Option 1 — npx (no install needed, requires Node)
+npx serve
+
+# Option 2 — Python (built into macOS)
+python3 -m http.server 8000
+
+# Option 3 — VS Code "Live Server" extension: right-click index.html → "Open with Live Server"
 ```
 
-> **Important — do NOT use `python -m http.server`, `live-server`, or any
-> other plain static file server to run this app.** The source code uses
-> bare ES module imports (e.g. `import { createClient } from '@supabase/supabase-js'`)
-> which only Vite (or another bundler) can resolve. With a plain static
-> server the page will render but every button will be inert because the
-> JS modules silently fail to load. Always use `npm run dev` (or
-> `npm run build && npm run preview`).
+Then open `http://localhost:8000` (or whatever port the tool prints).
 
-## Configuration
+> **Camera/QR scanning** requires either `http://localhost` or HTTPS — Chrome
+> blocks `getUserMedia` on plain HTTP from any other origin. Use `localhost`
+> for development; in production Vercel gives you HTTPS automatically.
 
-The Supabase project URL and anon key are read from `.env`:
+## Deploy to Vercel
 
-```env
-VITE_SUPABASE_URL=https://YOUR-PROJECT.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR-ANON-KEY
+No build step needed. Two ways:
+
+```bash
+# Option 1 — Vercel CLI
+npm i -g vercel
+vercel        # follow the prompts; "What's your project's framework preset?" → Other
 ```
 
-`.env.example` is checked in for reference. Do **not** commit `.env`.
-
-## QR scanning
-
-- Worker movement form uses **jsQR** (loaded from CDN in `worker.html`) and
-  `navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })`.
-- Manager parts page generates QR codes with **qrcode.js** (CDN in `dashboard.html`)
-  for printing onto bin labels.
-
-The app targets Chrome on Android tablet and works on laptop / phone too.
+Or **drag-and-drop**: go to <https://vercel.com/new>, drop the project folder
+in, accept defaults. Vercel detects it as a static site, uploads the files,
+and gives you a URL on `*.vercel.app` immediately.
 
 ## Adding the first manager
 
-Insert one row directly into the `users` table where `pin` is the SHA-256 of
-the 4-digit PIN you want to use, e.g. for PIN `1234`:
+There's no UI for creating the first manager (the Users tab requires you to
+already be logged in as a manager). Insert one row directly into the `users`
+table where `pin` is the SHA-256 of the 4-digit PIN you want to use, e.g.
+for PIN `1234`:
 
 ```sql
 insert into users (name, pin, role)
-values ('Admin', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', 'manager');
+values (
+  'Admin',
+  '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4',
+  'manager'
+);
 ```
 
 Then log in with `1234` from the PIN pad.
 
 ## Color tokens
 
-Defined in `src/css/style.css`:
+Defined in [`css/style.css`](css/style.css):
 
 | Token            | Value     |
 | ---------------- | --------- |
