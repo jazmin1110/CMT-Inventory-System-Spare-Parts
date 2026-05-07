@@ -549,11 +549,12 @@ document.querySelector('#clear-mv-filter').addEventListener('click', () => {
   renderMovements();
 });
 
-// ---------- Maintenance tab ----------
+// ---------- Maintenance tab (read-only) ----------
+// Maintenance entries are now created via the Log Movement OUT flow on
+// worker.html. The manager dashboard simply displays the resulting log.
 async function loadMaintenance() {
   try {
     if (!machinesCache.length) await loadLookups();
-    fillSelect(document.querySelector('#maint-machine'), machinesCache);
 
     const { data, error } = await supabase
       .from('maintenance_log')
@@ -602,42 +603,6 @@ function renderMaintenance(rows) {
     })
     .join('');
 }
-
-document.querySelector('#show-add-maint').addEventListener('click', () => {
-  document.querySelector('#add-maint-card').style.display = 'block';
-});
-document.querySelector('#cancel-add-maint').addEventListener('click', () => {
-  document.querySelector('#add-maint-card').style.display = 'none';
-  document.querySelector('#add-maint-form').reset();
-});
-document.querySelector('#add-maint-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const payload = {
-    date: fd.get('date'),
-    machine_id: fd.get('machine_id') || null,
-    type: fd.get('type'),
-    work_done: fd.get('work_done') || null,
-    parts_used: fd.get('parts_used') || null,
-    technician: fd.get('technician') || null,
-    downtime_hrs: fd.get('downtime_hrs') ? Number(fd.get('downtime_hrs')) : null,
-    cost: fd.get('cost') ? Number(fd.get('cost')) : null,
-    next_service_date: fd.get('next_service_date') || null,
-  };
-  await withBusyButton(document.querySelector('#save-maint-btn'), async () => {
-    try {
-      const { error } = await supabase.from('maintenance_log').insert(payload);
-      if (error) throw error;
-      showBanner('Maintenance entry saved!', 'success');
-      e.target.reset();
-      document.querySelector('#add-maint-card').style.display = 'none';
-      await loadMaintenance();
-    } catch (err) {
-      console.error(err);
-      showBanner('Save failed: ' + (err.message || err), 'error');
-    }
-  });
-});
 
 // ---------- Users tab ----------
 async function loadUsers() {

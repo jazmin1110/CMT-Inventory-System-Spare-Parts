@@ -67,7 +67,6 @@ async function loadLookups() {
   // Populate the worker dropdowns now that we have the data.
   fillUserSelect(document.querySelector('#requested-by'));
   fillMachineSelect(document.querySelector('#machine'));
-  fillMachineSelect(document.querySelector('#maint-machine'));
 }
 
 function fillUserSelect(selectEl) {
@@ -321,12 +320,21 @@ const moveTypeBtns = document.querySelectorAll('#move-type button');
 const moveTypeVal = document.querySelector('#move-type-val');
 const rowRequestedBy = document.querySelector('#row-requested-by');
 const rowMachine = document.querySelector('#row-machine');
+const rowMaintToggle = document.querySelector('#row-maint-toggle');
+const rowMaintFields = document.querySelector('#row-maint-fields');
+const maintToggle = document.querySelector('#maint-toggle');
 
-/** Show "Requested by" + "Machine" only when move type is OUT. */
+/**
+ * Show OUT-only fields (Requested by, Machine, maintenance toggle) when the
+ * move type is OUT. The maintenance fields sub-card additionally requires the
+ * toggle to be checked.
+ */
 function syncOutOnlyFields() {
   const isOut = moveTypeVal.value === 'OUT';
   rowRequestedBy.style.display = isOut ? '' : 'none';
   rowMachine.style.display = isOut ? '' : 'none';
+  rowMaintToggle.style.display = isOut ? '' : 'none';
+  rowMaintFields.style.display = isOut && maintToggle.checked ? '' : 'none';
 }
 moveTypeBtns.forEach((b) => {
   b.addEventListener('click', () => {
@@ -336,6 +344,7 @@ moveTypeBtns.forEach((b) => {
     syncOutOnlyFields();
   });
 });
+maintToggle.addEventListener('change', syncOutOnlyFields);
 syncOutOnlyFields();
 
 const qtyDisplay = document.querySelector('#qty-display');
@@ -457,6 +466,47 @@ movementForm.addEventListener('submit', async (e) => {
   try {
     const { error } = await supabase.from('movement_log').insert(payload);
     if (error) throw error;
+
+    // Optional: also create a maintenance_log row when the OUT was for
+    // maintenance. The two inserts are sequential, not atomic; if this
+    // second one fails we surface a clear error so the user knows the
+    // movement was saved but the maintenance entry was not.
+    if (isOut && maintToggle.checked) {
+      const today = new Date().toISOString().slice(0, 10);
+      const partRow = partsCache.find((p) => p.part_id === payload.part_id);
+      const partsUsedText =
+        `${payload.quantity} x ${payload.part_id}` +
+        (partRow?.name ? ` (${partRow.name})` : '');
+
+      const maintPayload = {
+        date: today,
+        machine_id: payload.machine_id,
+        type: document.querySelector('#maint-type').value,
+        work_done:
+          document.querySelector('#maint-work-done').value.trim() || null,
+        parts_used: partsUsedText,
+        technician:
+          document.querySelector('#maint-technician').value.trim() || null,
+        downtime_hrs: document.querySelector('#maint-downtime').value
+          ? Number(document.querySelector('#maint-downtime').value)
+          : null,
+        cost: document.querySelector('#maint-cost').value
+          ? Number(document.querySelector('#maint-cost').value)
+          : null,
+        next_service_date:
+          document.querySelector('#maint-next').value || null,
+      };
+
+      const { error: mErr } = await supabase
+        .from('maintenance_log')
+        .insert(maintPayload);
+      if (mErr) {
+        throw new Error(
+          'Movement saved, but maintenance entry failed: ' + mErr.message
+        );
+      }
+    }
+
     showBanner('Movement logged!', 'success');
     movementForm.reset();
     setQty(1);
@@ -464,6 +514,8 @@ movementForm.addEventListener('submit', async (e) => {
       b.classList.toggle('active', b.dataset.val === 'IN')
     );
     moveTypeVal.value = 'IN';
+    // Reset the maintenance toggle to its default-on state.
+    maintToggle.checked = true;
     syncOutOnlyFields();
     partNameHint.textContent = '';
   } catch (err) {
@@ -618,11 +670,11 @@ document.querySelector('#clear-mv-filter').addEventListener('click', () => {
   renderMovements();
 });
 
-// ---------- Maintenance tab (read + add) ----------
+// ---------- Maintenance tab (read-only) ----------
+// Maintenance entries are now created via the Log Movement OUT flow.
 async function loadMaintenance() {
   try {
     if (!machinesCache.length) await loadLookups();
-    fillMachineSelect(document.querySelector('#maint-machine'));
 
     const { data, error } = await supabase
       .from('maintenance_log')
@@ -671,42 +723,6 @@ function renderMaintenance(rows) {
     })
     .join('');
 }
-
-document.querySelector('#show-add-maint').addEventListener('click', () => {
-  document.querySelector('#add-maint-card').style.display = 'block';
-});
-document.querySelector('#cancel-add-maint').addEventListener('click', () => {
-  document.querySelector('#add-maint-card').style.display = 'none';
-  document.querySelector('#add-maint-form').reset();
-});
-document.querySelector('#add-maint-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const fd = new FormData(e.target);
-  const payload = {
-    date: fd.get('date'),
-    machine_id: fd.get('machine_id') || null,
-    type: fd.get('type'),
-    work_done: fd.get('work_done') || null,
-    parts_used: fd.get('parts_used') || null,
-    technician: fd.get('technician') || null,
-    downtime_hrs: fd.get('downtime_hrs') ? Number(fd.get('downtime_hrs')) : null,
-    cost: fd.get('cost') ? Number(fd.get('cost')) : null,
-    next_service_date: fd.get('next_service_date') || null,
-  };
-  await withBusyButton(document.querySelector('#save-maint-btn'), async () => {
-    try {
-      const { error } = await supabase.from('maintenance_log').insert(payload);
-      if (error) throw error;
-      showBanner('Maintenance entry saved!', 'success');
-      e.target.reset();
-      document.querySelector('#add-maint-card').style.display = 'none';
-      await loadMaintenance();
-    } catch (err) {
-      console.error(err);
-      showBanner('Save failed: ' + (err.message || err), 'error');
-    }
-  });
-});
 
 // ---------- Boot ----------
 (async () => {
